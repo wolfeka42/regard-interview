@@ -1,0 +1,205 @@
+<title>Patient History Pipeline Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column; the PHI field matrix and flow break wider as the two visual anchors. */
+:root {
+  --bg: #F3F5F7;
+  --surface: #FFFFFF;
+  --fg: #16202B;
+  --muted: #566372;
+  --line: #D5DCE3;
+  --accent: #0B6E6E;
+  --accent-soft: #DDEFEE;
+  --phi: #A4510B;
+  --phi-soft: #FBEADB;
+  --off: #EEF1F4;
+  --off-fg: #9AA6B2;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F151C; --surface: #17202A; --fg: #E4EAF0; --muted: #9AA8B6; --line: #2A3643;
+    --accent: #4FC1BC; --accent-soft: #143534; --phi: #F0A060; --phi-soft: #3A2616;
+    --off: #1C2631; --off-fg: #5D6B79; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F151C; --surface: #17202A; --fg: #E4EAF0; --muted: #9AA8B6; --line: #2A3643;
+  --accent: #4FC1BC; --accent-soft: #143534; --phi: #F0A060; --phi-soft: #3A2616;
+  --off: #1C2631; --off-fg: #5D6B79; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; display: grid; gap: 56px; }
+.read { max-width: 68ch; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.9rem); font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1.55rem; font-weight: 600; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p { margin: 0; }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+.eyebrow { font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 1.15rem; color: var(--muted); }
+section { display: grid; gap: 18px; }
+.head { display: grid; gap: 14px; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+.meta b { color: var(--fg); font-weight: 500; }
+
+.flow { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; overflow-x: auto; }
+.flow pre.mermaid { margin: 0; background: transparent; }
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+thead th { font-family: var(--mono); font-size: 0.74rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; white-space: nowrap; }
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+tbody th { font-weight: 500; white-space: nowrap; }
+.matrix td { text-align: center; white-space: nowrap; }
+.cell { display: inline-block; min-width: 92px; padding: 3px 8px; border-radius: 3px; font-family: var(--mono); font-size: 0.76rem; }
+.c-phi { background: var(--phi-soft); color: var(--phi); }
+.c-ok { background: var(--accent-soft); color: var(--accent); }
+.c-off { background: var(--off); color: var(--off-fg); }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 0.85rem; color: var(--muted); align-items: center; }
+
+.decisions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.dec { background: var(--surface); padding: 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.dec .id { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); }
+.dec p { color: var(--muted); font-size: 0.93rem; }
+
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.split > div { display: grid; gap: 10px; align-content: start; min-width: 0; }
+ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; }
+li::marker { color: var(--muted); }
+.cmd { font-family: var(--mono); font-size: 0.86rem; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-x: auto; white-space: pre; }
+
+.thread { display: grid; gap: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.story { display: grid; grid-template-columns: 2.4rem 1fr auto; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); align-items: baseline; }
+.story:last-child { border-bottom: 0; }
+.story .n { font-family: var(--mono); color: var(--muted); }
+.story .tag { font-family: var(--mono); font-size: 0.72rem; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+.tag.keep { background: var(--accent-soft); color: var(--accent); }
+.tag.cut { background: var(--off); color: var(--muted); }
+.note { font-size: 0.88rem; color: var(--muted); }
+footer { font-size: 0.85rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+@media (max-width: 520px) { .story { grid-template-columns: 2rem 1fr; } .story .tag { grid-column: 2; justify-self: start; } }
+</style>
+
+<div class="wrap">
+
+  <header class="head">
+    <span class="eyebrow">Architecture · interview-test</span>
+    <h1>Patient History Pipeline</h1>
+    <p class="lede read">Raw healthcare files become one gold table a doctor uses to review a single patient's history: every encounter, lab, diagnosis and medication, in date order, with exact service dates and no direct identifiers.</p>
+    <div class="meta">
+      <span>Spark <b>3.5.8</b></span><span>EMR on EC2 <b>7.14.0</b></span><span>Python <b>3.11</b></span><span>Java <b>17</b></span><span>Updated <b>2026-10-12</b></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="head">
+      <span class="eyebrow">Shape</span>
+      <h2>Three jobs that only talk through storage</h2>
+      <p class="read">Bronze, silver and gold are separate jobs. Each one reads the previous layer from Parquet, runs pure DataFrame transforms and overwrites its own folder. On EMR each job is one Step, and locally the same three functions run in sequence.</p>
+    </div>
+    <div class="flow">
+<pre class="mermaid">
+flowchart LR
+  raw["Raw CSV / JSON<br/>synthetic or supplied"] -->|"all columns as text"| B["Bronze job"]
+  B --> bz[("bronze/{source}<br/>raw, PHI")]
+  bz -->|"type, clean, drop + count"| S["Silver job"]
+  key[["HMAC key<br/>env / Secrets Manager"]] -.-> S
+  S --> sv[("silver/{source}<br/>clean, PHI")]
+  sv -->|"select, union, cast"| G["Gold job"]
+  G --> gd[("gold/patient_history<br/>PHI for treatment")]
+  gd --> doc["Doctor reviewing<br/>one patient"]
+</pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <span class="eyebrow">PHI boundary</span>
+      <h2>Where each field is allowed to live</h2>
+      <p class="read">Every layer is PHI, gold included, because gold keeps full service dates for treatment use (45 CFR 164.506). Direct identifiers stop at <code>silver/patients</code>. That table never holds the patient key, so no MRN-to-key lookup table exists anywhere.</p>
+    </div>
+    <div class="scroll">
+      <table class="matrix">
+        <thead><tr><th>Field</th><th>bronze</th><th>silver / patients</th><th>silver / events</th><th>gold</th></tr></thead>
+        <tbody>
+          <tr><th>Name, SSN, phone, email, street, city</th><td><span class="cell c-phi">raw</span></td><td><span class="cell c-phi">held</span></td><td><span class="cell c-off">—</span></td><td><span class="cell c-off">—</span></td></tr>
+          <tr><th>MRN, facility</th><td><span class="cell c-phi">raw</span></td><td><span class="cell c-phi">normalized</span></td><td><span class="cell c-phi">join, then dropped</span></td><td><span class="cell c-off">—</span></td></tr>
+          <tr><th>Date of birth</th><td><span class="cell c-phi">raw</span></td><td><span class="cell c-phi">held</span></td><td><span class="cell c-off">—</span></td><td><span class="cell c-off">—</span></td></tr>
+          <tr><th><code>patient_key_v1</code> (HMAC-SHA256)</th><td><span class="cell c-off">—</span></td><td><span class="cell c-off">never</span></td><td><span class="cell c-ok">computed</span></td><td><span class="cell c-ok">kept</span></td></tr>
+          <tr><th><code>age_at_encounter</code> (90+ capped)</th><td><span class="cell c-off">—</span></td><td><span class="cell c-off">—</span></td><td><span class="cell c-ok">computed</span></td><td><span class="cell c-ok">kept</span></td></tr>
+          <tr><th>ZIP</th><td><span class="cell c-phi">5-digit</span></td><td><span class="cell c-phi">5-digit</span></td><td><span class="cell c-ok">zip3</span></td><td><span class="cell c-ok">zip3</span></td></tr>
+          <tr><th>Service dates</th><td><span class="cell c-phi">text</span></td><td><span class="cell c-off">—</span></td><td><span class="cell c-phi">full date</span></td><td><span class="cell c-phi">full date</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="cell c-phi">amber</span> identifying or date PHI</span>
+      <span><span class="cell c-ok">teal</span> derived, safe for gold</span>
+      <span><span class="cell c-off">grey</span> not present</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <span class="eyebrow">Decisions</span>
+      <h2>The rules every story builds against</h2>
+      <p class="read">Six stories are built independently. These rules keep them compatible. The full contract, with what each rule prevents, is in <code>ARCHITECTURE-SPINE.md</code>.</p>
+    </div>
+    <div class="decisions">
+      <div class="dec"><span class="id">AD-1 · AD-2</span><h3>Storage is the only handoff</h3><p>Parquet at <code>{data_root}/{layer}/{source}/</code>, overwritten each run, so reruns are safe. Local folder or S3, same code.</p></div>
+      <div class="dec"><span class="id">AD-3</span><h3>Declared schemas, typed once</h3><p>Every <code>StructType</code> lives in <code>schemas.py</code>. Bronze reads text only; silver parses dates. The day-of data swap edits this one module.</p></div>
+      <div class="dec"><span class="id">AD-4</span><h3>Silver derives, gold selects</h3><p>One helper owns the patient join, age and ZIP3. Events without a patient are dropped and counted. Gold only selects, unions and casts.</p></div>
+      <div class="dec"><span class="id">AD-5</span><h3>One gold shape</h3><p>Every event type passes through <code>conform_to_gold</code>, which fills missing columns with typed nulls and drops anything not in the gold schema.</p></div>
+      <div class="dec"><span class="id">AD-6 · AD-7</span><h3>One key owner, fail fast</h3><p>HMAC-SHA256 over <code>facility:mrn</code>, the only UDF. A missing key stops every job before Spark starts. The key never appears in step args, Spark config or logs.</p></div>
+      <div class="dec"><span class="id">AD-8</span><h3>Counts, never values</h3><p>Logs carry layer, source and row counts only. <code>dropped = rows_in − rows_out</code> covers invalid rows, duplicates and orphans.</p></div>
+    </div>
+  </section>
+
+  <section class="split">
+    <div>
+      <span class="eyebrow">Running it · AD-9, AD-10</span>
+      <h2>One command, two targets</h2>
+      <div class="cmd">python -m pipeline run --target local</div>
+      <p class="note">Runs bronze, silver and gold in sequence in one process. Tests and the demo use this.</p>
+      <div class="cmd">python -m pipeline run --target emr</div>
+      <p class="note">Prints the <code>aws emr create-cluster</code> command: a transient 7.14.0 cluster with three Steps that shuts down when gold finishes. Local versions are pinned to match the cluster.</p>
+    </div>
+    <div>
+      <span class="eyebrow">Named, not built</span>
+      <h2>Required in production</h2>
+      <ul>
+        <li>Care-team-only access to gold, with read audit logging</li>
+        <li>SSE-KMS encryption at rest for every layer and the EMR log bucket; TLS in transit</li>
+        <li>Signed AWS BAA and a HIPAA-eligible EMR configuration</li>
+        <li>Secrets Manager delivery of the HMAC key to EMR</li>
+        <li>Key rotation to <code>patient_key_v2</code></li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="head">
+      <span class="eyebrow">Build order</span>
+      <h2>A steel thread, cut from the end</h2>
+      <p class="read">Story 1 produces a working gold table by itself. Each later story adds one capability. If time runs short, cut from story 6 upward.</p>
+    </div>
+    <div class="thread">
+      <div class="story"><span class="n">1</span><span>A doctor sees one patient's encounters in gold, keyed by <code>patient_key_v1</code></span><span class="tag keep">never cut</span></div>
+      <div class="story"><span class="n">2</span><span>Gold shows age and location at every encounter</span><span class="tag cut">cut 5th</span></div>
+      <div class="story"><span class="n">3</span><span>Lab results appear in the history</span><span class="tag cut">cut 4th</span></div>
+      <div class="story"><span class="n">4</span><span>Diagnoses and medications appear in the history</span><span class="tag cut">cut 3rd</span></div>
+      <div class="story"><span class="n">5</span><span>Bad input is dropped and counted without leaking PHI</span><span class="tag cut">cut 2nd</span></div>
+      <div class="story"><span class="n">6</span><span>The same pipeline runs on AWS EMR</span><span class="tag cut">cut 1st</span></div>
+    </div>
+    <p class="note">The PHI/HIPAA review runs inside every build and is never cut.</p>
+  </section>
+
+  <footer>All data in this project is synthetic. Source: <code>_bmad-output/planning-artifacts/architecture/architecture-interview-test-2026-10-12/ARCHITECTURE-SPINE.md</code></footer>
+</div>

@@ -1,0 +1,6 @@
+[[workflow.lenses]]
+code = "phi"
+name = "PHI / HIPAA"
+applies_to = "code"
+when = "Python or PySpark code, or diffs, that read, transform or write patient data."
+instruction = "Load `{project-root}/_bmad/custom/phi-review-lens.md` and follow it."

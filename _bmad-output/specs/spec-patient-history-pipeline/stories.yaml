@@ -1,0 +1,44 @@
+- id: "1"
+  title: Steel thread - a doctor sees one patient's encounters in gold
+  description: >-
+    One command takes a synthetic encounters file through bronze, silver and gold, producing
+    a gold row per encounter keyed by patient_key_v1 with the full encounter date (CAP-1,
+    CAP-3, CAP-4, CAP-5, CAP-6 in their simplest form). Tests assert the exact gold schema,
+    the 64-hex deterministic key, a missing key failing at startup, rows in time order
+    (spine AD-11), and blank MRNs dropped rather than sharing a key (spine AD-6).
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    Keep the schema in one swappable StructType module; this is where the interview's real
+    data lands after the data review. Smallest working slice only: one source, no joins.
+- id: "2"
+  title: Gold shows each patient's age and location at every encounter
+  description: >-
+    Join the patients source so each gold event carries age_at_encounter (90+ for ages over
+    89), sex, state and zip3 (CAP-2, CAP-4). Tests prove DOB, name, SSN, phone, email,
+    street, city and full ZIP never reach gold.
+- id: "3"
+  title: Lab results appear in the patient's history
+  description: >-
+    Lab results become dated gold events with code, value and unit, alongside encounters
+    for the same patient_key_v1 (CAP-4). Extends the existing schema test.
+- id: "4"
+  title: Diagnoses and medications appear in the patient's history
+  description: >-
+    Diagnoses and medications become dated gold events, completing the event types in
+    data-model.md (CAP-4).
+- id: "5"
+  title: Bad input is handled without leaking PHI
+  description: >-
+    Invalid rows are dropped in silver and only their counts are logged; bronze row count
+    matches the source (CAP-1, CAP-2). Tests prove no row values appear in logs or errors.
+- id: "6"
+  title: The same pipeline is ready to run on AWS EMR
+  description: >-
+    `python -m pipeline run --target emr` prints an `aws emr create-cluster` command for a
+    transient EMR 7.14.0 cluster with three Steps, bronze to silver to gold (CAP-5, spine
+    AD-9). The story decides how the job gets the HMAC key from Secrets Manager, and a test
+    proves the printed command contains no key value (spine AD-7).
+  invoke_dev_with: >-
+    Use placeholders for the S3 bucket, IAM roles, subnet and region. No boto3. Only a
+    secret ID may appear in the command, never the key value.

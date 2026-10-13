@@ -1,0 +1,15 @@
+# Local environment
+.venv/
+.idea/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Personal BMad and Claude Code settings
+_bmad/config.user.toml
+_bmad/custom/config.user.toml
+.claude/settings.local.json
+
+# Pipeline data (keep PHI and generated data out of git)
+data/
