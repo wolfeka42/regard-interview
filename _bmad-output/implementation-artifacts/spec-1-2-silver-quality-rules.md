@@ -2,8 +2,8 @@
 title: 'Story 1 (part 2): Silver cleans every source quality issue'
 type: 'feature'
 created: '2026-10-14'
-status: 'in-progress'
-baseline_commit: '1a39acf1d899b24918e5630c774eb0b46f0e42e9'
+status: 'done'
+baseline_commit: '601f1ce4336d16bef262db73f7e3adbd053a3ec1'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -56,10 +56,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `pipeline/schemas.py`, `pipeline/jobs/silver.py` -- `SENTINELS`, sentinel-aware `_clean`, `_test_name`
-- [ ] `tests/datasets.py`, `synth/generate.py` -- every matrix issue in dummy and synthetic bronze, with expected silver rows
-- [ ] `tests/test_silver.py` -- a test per matrix row; each output checked with `assert_schema`, `assert_content`, `assert_deduped` (and `assert_hashed` for encounters)
-- [ ] `_bmad-output/specs/spec-patient-history-pipeline/stories.yaml` -- fold story 2 into story 1; renumber stories 3 and 4 to 2 and 3
+- [x] `pipeline/schemas.py`, `pipeline/jobs/silver.py` -- `SENTINELS`, sentinel-aware `_clean`, `_test_name`
+- [x] `tests/datasets.py`, `synth/generate.py` -- every matrix issue in dummy and synthetic bronze, with expected silver rows
+- [x] `tests/test_silver.py` -- a test per matrix row; each output checked with `assert_schema`, `assert_content`, `assert_deduped` (and `assert_hashed` for encounters)
+- [x] `_bmad-output/specs/spec-patient-history-pipeline/stories.yaml` -- fold story 2 into story 1; renumber stories 3 and 4 to 2 and 3
 
 **Acceptance Criteria:**
 - Given the extended dummy bronze datasets, when `clean_encounters`, `clean_labs` and `clean_providers` run, then all four check functions pass against the expected `clean_*` datasets.
@@ -67,6 +67,12 @@ context:
 - Given synthetic bronze CSVs containing every matrix issue, when `python -m pipeline run --target local` runs, then the end-to-end test still passes, gold included.
 
 ## Implementation Notes
+
+- `normalize_id(_clean(...))` is wrapped as a small `_id` helper in `silver.py`; `_clean` nulls `SENTINELS` on `lower(trimmed)`, so `parse_ts`, `_status`, casts and `_test_name` inherit it.
+- `tests/assertions.py` gains an independent `SENTINELS` copy and `clean_text`; `normalize`, `parse_ts` and `kept_encounter_versions` use it, so `assert_hashed` and the gold oracle expect null for a sentinel patient. `test_sentinels_constant_is_the_agreed_list` ties both copies to the decision.
+- Dummy data: encounters 24 in / 14 out / 10 dropped, labs 19 / 13 / 6, providers 14 / 9 / 5. One new gold row (alpha, provider 3, 2024-01-09). The synthetic generator carries the same case rows.
+- Also updated `data-model.md` "Required tests" line (story 2 -> story 1 part 2). Not touched (outside the silver-only boundary): `pipeline/__main__.py` docstring still says "EMR arrives in story 4" (now story 3).
+- Verified: ruff clean; `pytest -q` 75 passed; mutation check (sentinel nulling off, `_test_name` off) fails 15 and 5 tests respectively; synth + `python -m report` PASS. Reports are stamped `601f1ce (dirty tree)`: regenerate after commit.
 
 ## Spec Change Log
 

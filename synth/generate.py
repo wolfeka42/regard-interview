@@ -3,8 +3,11 @@
 Every value is invented. Two customers: `alpha` uses integer IDs, `beta` UUIDs (plus a
 deliberate integer collision with alpha). Hand-written rows cover each story 1 case:
 duplicates, versioned encounters, multi-provider encounters, cancelled visits, lab
-statuses, next-day labs, unknown providers, bad durations and missing required fields.
-A seeded bulk adds ordinary activity on top.
+statuses, next-day labs, unknown providers, bad durations and missing required fields;
+and each silver quality rule: sentinels (trimmed, any case, NBSP-padded) in optional and
+required fields, a sentinel patient, `test_name` formatting, "Na" kept as text, blank
+`specialty`, `active_flag` forms and non-numeric `result_value`. A seeded bulk adds
+ordinary activity on top.
 """
 
 from __future__ import annotations
@@ -177,6 +180,24 @@ CASE_ENCOUNTERS = [
         "2024-01-06T22:00:00Z",
         "COMPLETED",
     ),
+    # Sentinels in optional fields (end_time, status, updated_at): null, row kept.
+    ("alpha", "1014", "8", "3", "2024-01-09T08:00:00Z", "unknown", "2024-01-09T09:00:00Z", " n/a "),
+    # Sentinel patient: kept with null patient_id and null hash.
+    (
+        "alpha",
+        "1015",
+        "unknown",
+        "3",
+        "2024-01-09T10:00:00Z",
+        "2024-01-09T16:00:00Z",
+        "?",
+        "Null",
+    ),
+    # Sentinels in required fields: dropped.
+    ("alpha", "1016", "1", "UNKNOWN", "2024-01-09T08:00:00Z", "", "", "completed"),
+    ("alpha", "1017", "1", "1", "NULL", "", "", "completed"),
+    (f"{NBSP}-{NBSP}", "1018", "1", "1", "2024-01-09T08:00:00Z", "", "", "completed"),
+    ("alpha", "none", "1", "1", "2024-01-09T08:00:00Z", "", "", "completed"),
 ]
 
 # labs: customer, lab_id, encounter_id, test_name, result_value, result_unit, observed_time, status
@@ -212,6 +233,33 @@ CASE_LABS = [
     ("alpha", "5008", "1004", "glucose", "abc", "mg/dL", "2024-01-07T09:00:00Z", "final"),
     ("alpha", "5009", "1009", "sodium", "138", "mmol/L", "2024-01-05T14:00:00Z", "final"),
     ("beta", "L-0001", "B-0001", "glucose", "101", "mg/dL", "2024-01-05T09:00:00Z", "final"),
+    # test_name formatting; sentinel unit and status; padded and sentinel result_value.
+    (
+        "alpha",
+        "5010",
+        "1014",
+        "  Hemoglobin   A1C ",
+        " 4.1 ",
+        "-",
+        "2024-01-09T09:00:00Z",
+        "NULL",
+    ),
+    ("alpha", "5011", "1015", "GLUCOSE", "N/A", "mg/dL", "2024-01-09T11:00:00Z", "final"),
+    (
+        "alpha",
+        "5012",
+        "1015",
+        f"Hemoglobin{NBSP}\tA1C",
+        "6.0",
+        "%",
+        "2024-01-09T11:00:00Z",
+        "final",
+    ),
+    ("alpha", "5013", "1015", "Na", "139", "mmol/L", "2024-01-09T11:00:00Z", "final"),  # sodium
+    # Sentinels in required fields: dropped.
+    ("alpha", "5014", "N/A", "glucose", "90", "mg/dL", "2024-01-09T11:00:00Z", "final"),
+    ("?", "5015", "1001", "glucose", "90", "mg/dL", "2024-01-05T09:00:00Z", "final"),
+    ("alpha", "unknown", "1001", "glucose", "90", "mg/dL", "2024-01-05T09:00:00Z", "final"),
 ]
 
 # providers: customer, provider_id, provider_name, specialty, active_flag
@@ -224,6 +272,12 @@ CASE_PROVIDERS = [
     ("alpha", "", "Dr. Nobody", "Surgery", "yes"),  # missing provider_id
     ("beta", "1", "Dr. Dee Placeholder", "Oncology", "F"),
     ("beta", "c0ffee00-0000-4000-8000-0000000000d1", "Dr. Eve Fictional", "Radiology", "maybe"),
+    ("alpha", "4", "Dr. Flo Invented", "N/A", "N/A"),  # sentinel specialty and flag -> null
+    ("alpha", "5", "Dr. Gus Madeup", f"  {NBSP} ", " TRUE "),  # whitespace specialty -> null
+    ("alpha", "6", "Dr. Hal Imaginary", "Nephrology", "N"),
+    ("alpha", "7", "Dr. Ivy Pretend", "Dermatology", "Yes"),
+    ("alpha", "unknown", "Dr. Nil Nobody", "Surgery", "yes"),  # sentinel provider_id
+    ("-", "8", "Dr. Dash Nobody", "Surgery", "yes"),  # sentinel customer
 ]
 
 STATUSES = ("completed", "Completed", " completed ", "in-progress", "cancelled")

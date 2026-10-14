@@ -43,12 +43,23 @@ def assert_deduped(df: DataFrame, keys) -> None:
     assert repeated == 0, f"{repeated} repeated keys on {list(keys)}"
 
 
-def normalize(value: str | None) -> str | None:
-    """Independent Python twin of hashing.normalize_id."""
+# Independent copy of data-model.md's sentinel list (test_silver checks it matches
+# pipeline.schemas.SENTINELS). "na" is not a sentinel.
+SENTINELS = frozenset({"", "null", "n/a", "none", "-", "?", "unknown"})
+
+
+def clean_text(value: str | None) -> str | None:
+    """Independent Python twin of silver's _clean: Unicode trim; a sentinel becomes null."""
     if value is None:
         return None
-    stripped = value.strip().lower()
-    return stripped or None
+    stripped = value.strip()
+    return None if stripped.lower() in SENTINELS else stripped
+
+
+def normalize(value: str | None) -> str | None:
+    """Independent Python twin of silver's ID cleaning: sentinel-null, trim, lowercase."""
+    cleaned = clean_text(value)
+    return cleaned.lower() if cleaned is not None else None
 
 
 def expected_hash(salt: str, customer: str, patient_id: str | None) -> str | None:
@@ -65,7 +76,7 @@ _TS = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(Z|[+-]\d{2}(\d{2})?)$"
 
 def parse_ts(value: str | None) -> datetime | None:
     """Independent Python twin of silver's TIMESTAMP_FORMAT parse (Z, +05, +0530)."""
-    s = value.strip() if value is not None else ""
+    s = clean_text(value) or ""
     m = _TS.match(s)
     if not m:
         return None
@@ -98,7 +109,8 @@ def kept_encounter_versions(bronze_rows) -> dict[tuple, tuple]:
         if None in key or start is None:
             continue
         upd = parse_ts(r.updated_at)
-        status = r.status.strip().lower() if r.status and r.status.strip() else None
+        status = clean_text(r.status)
+        status = status.lower() if status is not None else None
         rest = (normalize(r.patient_id), start, parse_ts(r.end_time), upd, status)
         rank = ((upd is None, -upd.timestamp() if upd else 0), *[_asc(v) for v in rest])
         if key not in best or rank < best[key][0]:
@@ -110,7 +122,7 @@ def assert_hashed(silver_df: DataFrame, bronze_df: DataFrame, salt: str) -> None
     """patient_id all null; each hashedpatientid is the HMAC of the bronze version kept.
 
     Joins on normalized (customer, encounter_id, provider_id). A null hash is allowed only
-    where the kept bronze version's patient_id was null or blank.
+    where the kept bronze version's patient_id was null, blank or a sentinel.
     """
     not_null = silver_df.filter(F.col("patient_id").isNotNull()).count()
     assert not_null == 0, f"{not_null} silver rows with patient_id not null"

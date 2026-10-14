@@ -10,7 +10,7 @@ import csv
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from tests.assertions import expected_hash, normalize, parse_ts
+from tests.assertions import clean_text, expected_hash, normalize, parse_ts
 
 SALT = "synthetic-test-salt-not-a-real-secret"
 RUN_TS = datetime(2024, 3, 1, 12, 0, 0, tzinfo=UTC)
@@ -171,6 +171,24 @@ BRONZE_ENCOUNTER_ROWS = [
         "2024-01-06T22:00:00Z",
         "COMPLETED",
     ),
+    # Story 1 part 2: sentinels. Optional end_time and status sentinels give nulls; kept.
+    ("alpha", "1014", "8", "3", "2024-01-09T08:00:00Z", "unknown", "2024-01-09T09:00:00Z", " n/a "),
+    # Sentinel patient: kept with null patient_id and hash; "?" updated_at, "Null" status.
+    (
+        "alpha",
+        "1015",
+        "unknown",
+        "3",
+        "2024-01-09T10:00:00Z",
+        "2024-01-09T16:00:00Z",
+        "?",
+        "Null",
+    ),
+    # Sentinels in required fields: dropped.
+    ("alpha", "1016", "1", "UNKNOWN", "2024-01-09T08:00:00Z", "", "", "completed"),
+    ("alpha", "1017", "1", "1", "NULL", "", "", "completed"),
+    (f"{NBSP}-{NBSP}", "1018", "1", "1", "2024-01-09T08:00:00Z", "", "", "completed"),
+    ("alpha", "none", "1", "1", "2024-01-09T08:00:00Z", "", "", "completed"),
 ]
 
 # customer, lab_id, encounter_id, test_name, result_value, result_unit, observed_time, status
@@ -187,6 +205,34 @@ BRONZE_LAB_ROWS = [
     ("alpha", "5008", "1004", "glucose", "abc", "mg/dL", "2024-01-07T09:00:00Z", "final"),
     ("alpha", "5009", "1009", "sodium", "138", "mmol/L", "2024-01-05T14:00:00Z", "final"),
     ("beta", "L-0001", "B-0001", "glucose", "101", "mg/dL", "2024-01-05T09:00:00Z", "final"),
+    # Story 1 part 2: test_name formatting, sentinels in optional fields, result_value.
+    (
+        "alpha",
+        "5010",
+        "1014",
+        "  Hemoglobin   A1C ",
+        " 4.1 ",
+        "-",
+        "2024-01-09T09:00:00Z",
+        "NULL",
+    ),
+    ("alpha", "5011", "1015", "GLUCOSE", "N/A", "mg/dL", "2024-01-09T11:00:00Z", "final"),
+    (
+        "alpha",
+        "5012",
+        "1015",
+        f"Hemoglobin{NBSP}\tA1C",
+        "6.0",
+        "%",
+        "2024-01-09T11:00:00Z",
+        "final",
+    ),
+    # "Na" (sodium) is not a sentinel: kept as text.
+    ("alpha", "5013", "1015", "Na", "139", "mmol/L", "2024-01-09T11:00:00Z", "final"),
+    # Sentinels in required fields: dropped.
+    ("alpha", "5014", "N/A", "glucose", "90", "mg/dL", "2024-01-09T11:00:00Z", "final"),
+    ("?", "5015", "1001", "glucose", "90", "mg/dL", "2024-01-05T09:00:00Z", "final"),
+    ("alpha", "unknown", "1001", "glucose", "90", "mg/dL", "2024-01-05T09:00:00Z", "final"),
 ]
 
 # customer, provider_id, provider_name, specialty, active_flag
@@ -199,6 +245,14 @@ BRONZE_PROVIDER_ROWS = [
     ("alpha", "", "Dr. Nobody", "Surgery", "yes"),
     ("beta", "1", "Dr. Dee Placeholder", "Oncology", "F"),
     ("beta", B2_PROVIDER, "Dr. Eve Fictional", "Radiology", "maybe"),
+    # Story 1 part 2: optional sentinels, whitespace-only specialty, active_flag forms.
+    ("alpha", "4", "Dr. Flo Invented", "N/A", "N/A"),
+    ("alpha", "5", "Dr. Gus Madeup", f"  {NBSP} ", " TRUE "),
+    ("alpha", "6", "Dr. Hal Imaginary", "Nephrology", "N"),
+    ("alpha", "7", "Dr. Ivy Pretend", "Dermatology", "Yes"),
+    # Sentinels in required fields: dropped.
+    ("alpha", "unknown", "Dr. Nil Nobody", "Surgery", "yes"),
+    ("-", "8", "Dr. Dash Nobody", "Surgery", "yes"),
 ]
 
 # ---- Expected silver --------------------------------------------------------------
@@ -238,6 +292,8 @@ EXPECTED_CLEAN_ENCOUNTERS = [
     ("alpha", "1009", None, "99", t(5, 13), t(5, 19), "completed", 0.25, h("alpha", "1"), RUN_TS),
     ("beta", "b-0001", None, "1", t(5, 8), t(5, 14), "completed", 0.25, h("beta", "1"), RUN_TS),
     ("beta", P2, None, P1, t(6, 9), t(6, 21), "completed", 0.5, h("beta", B2_PATIENT), RUN_TS),
+    ("alpha", "1014", None, "3", t(9, 8), None, None, None, h("alpha", "8"), RUN_TS),
+    ("alpha", "1015", None, "3", t(9, 10), t(9, 16), None, 0.25, None, RUN_TS),
 ]
 
 EXPECTED_CLEAN_LABS = [
@@ -280,6 +336,10 @@ EXPECTED_CLEAN_LABS = [
     ("alpha", "5008", "1004", "glucose", None, "mg/dL", t(7, 9), "final", RUN_TS),
     ("alpha", "5009", "1009", "sodium", 138.0, "mmol/L", t(5, 14), "final", RUN_TS),
     ("beta", "l-0001", "b-0001", "glucose", 101.0, "mg/dL", t(5, 9), "final", RUN_TS),
+    ("alpha", "5010", "1014", "hemoglobin a1c", 4.1, None, t(9, 9), None, RUN_TS),
+    ("alpha", "5011", "1015", "glucose", None, "mg/dL", t(9, 11), "final", RUN_TS),
+    ("alpha", "5012", "1015", "hemoglobin a1c", 6.0, "%", t(9, 11), "final", RUN_TS),
+    ("alpha", "5013", "1015", "na", 139.0, "mmol/L", t(9, 11), "final", RUN_TS),
 ]
 
 EXPECTED_CLEAN_PROVIDERS = [
@@ -288,6 +348,10 @@ EXPECTED_CLEAN_PROVIDERS = [
     ("alpha", "3", "Dr. Cy Sample", "Neurology", False, RUN_TS),
     ("beta", "1", "Dr. Dee Placeholder", "Oncology", False, RUN_TS),
     ("beta", P1, "Dr. Eve Fictional", "Radiology", None, RUN_TS),
+    ("alpha", "4", "Dr. Flo Invented", None, None, RUN_TS),
+    ("alpha", "5", "Dr. Gus Madeup", None, True, RUN_TS),
+    ("alpha", "6", "Dr. Hal Imaginary", "Nephrology", False, RUN_TS),
+    ("alpha", "7", "Dr. Ivy Pretend", "Dermatology", True, RUN_TS),
 ]
 
 # ---- Expected gold (from the expected silver above) -------------------------------
@@ -299,6 +363,8 @@ EXPECTED_GOLD = [
     ("alpha", "2", date(2024, 1, 6), *BEN, 1, 1, 1.0, 1),
     ("alpha", "2", date(2024, 1, 7), *BEN, 1, 1, 0.5, 1),
     ("alpha", "2", date(2024, 1, 8), *BEN, 2, 1, 0.0, 0),
+    # 1014 (null end, null status) and 1015 (sentinel patient); labs 5010-5013.
+    ("alpha", "3", date(2024, 1, 9), "Dr. Cy Sample", "Neurology", False, 2, 1, 0.25, 4),
     ("alpha", "99", date(2024, 1, 5), None, None, None, 1, 1, 0.25, 1),
     ("beta", "1", date(2024, 1, 5), "Dr. Dee Placeholder", "Oncology", False, 1, 1, 0.25, 1),
     ("beta", P1, date(2024, 1, 6), "Dr. Eve Fictional", "Radiology", None, 1, 1, 0.5, 0),
@@ -326,10 +392,13 @@ _FALSE = {"false", "f", "n", "no", "0"}
 
 
 def _text(v):
-    if v is None:
-        return None
-    s = v.strip()
-    return s or None
+    """Trim; a sentinel (tests.assertions.SENTINELS) becomes null."""
+    return clean_text(v)
+
+
+def _test_name(v):
+    s = _text(v)
+    return " ".join(s.split()).lower() if s is not None else None
 
 
 def _float(v):
@@ -394,7 +463,7 @@ def oracle_gold(bronze: dict[str, list[dict[str, str]]]) -> list[tuple]:
                 normalize(r["customer"]),
                 normalize(r["lab_id"]),
                 normalize(r["encounter_id"]),
-                _text(r["test_name"]),
+                _test_name(r["test_name"]),
                 _float(r["result_value"]),
                 _text(r["result_unit"]),
                 parse_ts(r["observed_time"]),

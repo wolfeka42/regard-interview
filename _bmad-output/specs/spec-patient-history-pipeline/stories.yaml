@@ -13,7 +13,12 @@
     also assert the hash is deterministic, 64-hex and customer-scoped, patient_id is null in
     silver, a multi-provider encounter counts for each provider, cancelled encounters and
     retracted labs are excluded, a lab counts on its encounter's day, and a missing DATA_ROOT
-    fails at startup.
+    fails at startup. Part 2 (folded in from the old story 2, Kailey 2026-10-14): silver turns the
+    shared SENTINELS ("", null, n/a, none, -, ?, unknown; trimmed, case-insensitive; NA is not a
+    sentinel) into null in every bronze string field before any other step; normalizes test_name;
+    keeps empty specialty as null; parses active_flag and result_value; drops and counts rows
+    missing required fields. Synthetic data gains each issue, and tests assert each rule and the
+    exact dropped counts.
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
@@ -21,17 +26,11 @@
     the bronze job and RAW_ROOT; replace the facility/MRN and patient-history code. Keep all schemas and both constants in schemas.py.
     Reduce encounters to one row per (customer, encounter_id, provider_id) before the lab join.
 - id: "2"
-  title: Silver cleans every source's quality issues
-  description: >-
-    Turn shared sentinel values into null; normalize test_name; keep empty
-    specialty as null; parse active_flag and result_value; drop and count rows missing required
-    fields. Synthetic data gains each issue, and tests assert each rule and the dropped counts.
-- id: "3"
   title: Bad input is handled without leaking PHI
   description: >-
     Malformed bronze CSV rows and forced Spark failures never put row values in logs or errors;
     malformed rows are counted. Carries over the old story 5.
-- id: "4"
+- id: "3"
   title: The same pipeline is ready to run on AWS EMR
   description: >-
     Unchanged from the old story 6, except that the secret is the hashing salt: only a secret ID may

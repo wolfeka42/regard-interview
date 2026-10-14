@@ -66,5 +66,5 @@ Encounters are reduced to one row per `(customer, encounter_id, provider_id)` be
 - `tests/assertions.py`: `assert_schema(df, schema)` (exact names, types, order) and `assert_content(df, expected_rows)` (exact, order-independent), applied to every silver and gold output.
 - Hash: deterministic, 64 hex, customer-scoped; `patient_id` null in silver.
 - Cancelled encounters excluded; retracted labs excluded, null-status labs counted; multi-provider encounter counted per provider; lab counted on its encounter's day.
-- Each cleaning rule (story 2) and dropped counts.
+- Each silver cleaning rule (story 1 part 2) and exact dropped counts.
 - Missing `DATA_ROOT` fails at startup. All fixtures are synthetic.

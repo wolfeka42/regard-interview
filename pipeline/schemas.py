@@ -20,6 +20,10 @@ from pyspark.sql.types import (
 TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ssX"
 DEFAULT_SALT = "regard-demo-salt"
 
+# One shared list for every bronze string field: compared lowercase after a Unicode trim.
+# "na" is deliberately absent so "Na" (sodium) stays real text (Kailey, 2026-10-14).
+SENTINELS = ("", "null", "n/a", "none", "-", "?", "unknown")
+
 
 def _all_strings(*names: str) -> StructType:
     return StructType([StructField(n, StringType(), True) for n in names])

@@ -1,6 +1,6 @@
 """Silver job: bronze CSV -> {data_root}/silver/clean_{source}.csv (AD-1, AD-4).
 
-Each transform: normalize -> drop exact duplicates -> drop rows missing required
+Each transform: null sentinels -> normalize -> drop exact duplicates -> drop rows missing required
 fields -> keep one row per key -> derive -> conform_to.
 """
 
@@ -22,6 +22,7 @@ from pipeline.schemas import (
     CLEAN_ENCOUNTERS,
     CLEAN_LABS,
     CLEAN_PROVIDERS,
+    SENTINELS,
     TIMESTAMP_FORMAT,
     conform_to,
 )
@@ -40,10 +41,24 @@ LAB_REQUIRED = ("customer", "lab_id", "encounter_id")
 PROVIDER_REQUIRED = ("customer", "provider_id")
 
 
+_INNER_WS = r"(?U)\s+"
+
+
 def _clean(col: Column) -> Column:
-    """Strip Unicode whitespace; empty becomes null."""
+    """The single entry for every bronze string: strip Unicode whitespace; a sentinel
+    (SENTINELS, case-insensitive, empty included) becomes null."""
     stripped = F.regexp_replace(col, EDGE_WS, "")
-    return F.when(stripped != "", stripped)
+    return F.when(~F.lower(stripped).isin(*SENTINELS), stripped)
+
+
+def _id(col: Column) -> Column:
+    """Sentinel-null first, then the shared ID normalization."""
+    return normalize_id(_clean(col))
+
+
+def _test_name(col: Column) -> Column:
+    """Trimmed, inner Unicode whitespace runs collapsed to one space, lowercased."""
+    return F.lower(F.regexp_replace(_clean(col), _INNER_WS, " "))
 
 
 def parse_ts(col: Column) -> Column:
@@ -85,10 +100,10 @@ def clean_encounters(df: DataFrame, salt: str, run_ts: datetime | None = None) -
     hash_udf = make_hash_udf(salt)
     ts = _run_ts(run_ts)
     df = df.select(
-        normalize_id(F.col("customer")).alias("customer"),
-        normalize_id(F.col("encounter_id")).alias("encounter_id"),
-        normalize_id(F.col("patient_id")).alias("patient_id"),
-        normalize_id(F.col("provider_id")).alias("provider_id"),
+        _id(F.col("customer")).alias("customer"),
+        _id(F.col("encounter_id")).alias("encounter_id"),
+        _id(F.col("patient_id")).alias("patient_id"),
+        _id(F.col("provider_id")).alias("provider_id"),
         parse_ts(F.col("start_time")).alias("start_time"),
         parse_ts(F.col("end_time")).alias("end_time"),
         parse_ts(F.col("updated_at")).alias("updated_at"),
@@ -113,10 +128,10 @@ def clean_encounters(df: DataFrame, salt: str, run_ts: datetime | None = None) -
 def clean_labs(df: DataFrame, run_ts: datetime | None = None) -> DataFrame:
     ts = _run_ts(run_ts)
     df = df.select(
-        normalize_id(F.col("customer")).alias("customer"),
-        normalize_id(F.col("lab_id")).alias("lab_id"),
-        normalize_id(F.col("encounter_id")).alias("encounter_id"),
-        _clean(F.col("test_name")).alias("test_name"),
+        _id(F.col("customer")).alias("customer"),
+        _id(F.col("lab_id")).alias("lab_id"),
+        _id(F.col("encounter_id")).alias("encounter_id"),
+        _test_name(F.col("test_name")).alias("test_name"),
         _clean(F.col("result_value")).cast("double").alias("result_value"),
         _clean(F.col("result_unit")).alias("result_unit"),
         parse_ts(F.col("observed_time")).alias("observed_time"),
@@ -130,8 +145,8 @@ def clean_labs(df: DataFrame, run_ts: datetime | None = None) -> DataFrame:
 def clean_providers(df: DataFrame, run_ts: datetime | None = None) -> DataFrame:
     ts = _run_ts(run_ts)
     df = df.select(
-        normalize_id(F.col("customer")).alias("customer"),
-        normalize_id(F.col("provider_id")).alias("provider_id"),
+        _id(F.col("customer")).alias("customer"),
+        _id(F.col("provider_id")).alias("provider_id"),
         _clean(F.col("provider_name")).alias("provider_name"),
         _clean(F.col("specialty")).alias("specialty"),
         # Spark's cast accepts true/false/t/f/y/n/yes/no/1/0; anything else is null.
