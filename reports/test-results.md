@@ -1,10 +1,10 @@
 # Test results
 
-- Run start (UTC): 2026-10-14T19:53:05Z
-- Duration: 23.8 s
-- Commit: `5a96903c7bb1f24fed62a87a83af5f5ad9262e11 (dirty tree)`
+- Run start (UTC): 2026-10-14T20:09:09Z
+- Duration: 43.7 s
+- Commit: `462991376904de44a6fdb5db49f053a345bb8bc0 (dirty tree)`
 - Result: **PASS** (pytest exit code 0)
-- Totals: 56 tests, 56 passed, 0 failed, 0 errors, 0 skipped
+- Totals: 75 tests, 75 passed, 0 failed, 0 errors, 0 skipped
 
 | Test | Outcome | Time (s) |
 |---|---|---|
@@ -29,21 +29,21 @@
 | tests.test_config::test_job_entry_fails_fast_without_data_root[silver] | passed | 0.05 |
 | tests.test_config::test_job_entry_fails_fast_without_data_root[gold] | passed | 0.05 |
 | tests.test_config::test_no_bronze_job_module | passed | 0.00 |
-| tests.test_end_to_end::test_local_run_end_to_end | passed | 6.84 |
-| tests.test_end_to_end::test_rerun_is_idempotent | passed | 2.70 |
-| tests.test_end_to_end::test_gold_file_is_sorted | passed | 1.36 |
+| tests.test_end_to_end::test_local_run_end_to_end | passed | 7.22 |
+| tests.test_end_to_end::test_rerun_is_idempotent | passed | 3.14 |
+| tests.test_end_to_end::test_gold_file_is_sorted | passed | 1.46 |
 | tests.test_end_to_end::test_reordered_bronze_header_is_rejected | passed | 0.07 |
-| tests.test_gold::test_gold_from_expected_silver | passed | 1.14 |
-| tests.test_gold::test_duration_not_multiplied_by_labs | passed | 1.02 |
-| tests.test_gold::test_null_patient_counts_encounter_not_patient | passed | 0.92 |
-| tests.test_gold::test_only_cancelled_day_has_no_row_and_null_status_counts | passed | 0.94 |
-| tests.test_gold::test_lab_counted_on_encounter_day_and_customer_scoped | passed | 0.93 |
+| tests.test_gold::test_gold_from_expected_silver | passed | 1.07 |
+| tests.test_gold::test_duration_not_multiplied_by_labs | passed | 0.98 |
+| tests.test_gold::test_null_patient_counts_encounter_not_patient | passed | 0.91 |
+| tests.test_gold::test_only_cancelled_day_has_no_row_and_null_status_counts | passed | 0.95 |
+| tests.test_gold::test_lab_counted_on_encounter_day_and_customer_scoped | passed | 0.94 |
 | tests.test_gold::test_order_gold_sorts_by_keys_nulls_last | passed | 0.44 |
 | tests.test_hashing::test_normalize_id_trims_unicode_lowercases_keeps_zeros | passed | 0.09 |
-| tests.test_hashing::test_hash_is_hmac_of_customer_colon_patient | passed | 0.17 |
-| tests.test_hashing::test_hash_is_deterministic_across_formatting | passed | 0.13 |
-| tests.test_hashing::test_hash_is_customer_scoped | passed | 0.13 |
-| tests.test_hashing::test_different_salt_gives_different_hash | passed | 0.26 |
+| tests.test_hashing::test_hash_is_hmac_of_customer_colon_patient | passed | 0.16 |
+| tests.test_hashing::test_hash_is_deterministic_across_formatting | passed | 0.14 |
+| tests.test_hashing::test_hash_is_customer_scoped | passed | 0.14 |
+| tests.test_hashing::test_different_salt_gives_different_hash | passed | 0.28 |
 | tests.test_hashing::test_null_or_blank_input_gives_null | passed | 0.13 |
 | tests.test_report::test_escape_cell | passed | 0.00 |
 | tests.test_report::test_md_table | passed | 0.00 |
@@ -57,10 +57,29 @@
 | tests.test_report_main::test_failure_is_reported_then_exit_1[pytest] | passed | 0.00 |
 | tests.test_report_main::test_failure_is_reported_then_exit_1[pipeline] | passed | 0.00 |
 | tests.test_report_main::test_missing_data_root_writes_not_run_and_exits_2 | passed | 0.00 |
-| tests.test_silver::test_clean_encounters | passed | 0.94 |
-| tests.test_silver::test_clean_labs | passed | 0.62 |
-| tests.test_silver::test_clean_providers | passed | 0.58 |
-| tests.test_silver::test_dropped_rows_are_exactly_duplicates_and_missing_required | passed | 0.71 |
-| tests.test_silver::test_latest_updated_at_compared_as_timestamp | passed | 0.49 |
-| tests.test_silver::test_default_run_ts_is_now_in_whole_seconds | passed | 0.27 |
-| tests.test_silver::test_silver_main_writes_three_checked_files | passed | 2.65 |
+| tests.test_silver::test_clean_encounters | passed | 0.98 |
+| tests.test_silver::test_clean_labs | passed | 0.65 |
+| tests.test_silver::test_clean_providers | passed | 0.62 |
+| tests.test_silver::test_dropped_rows_are_exactly_duplicates_and_missing_required | passed | 0.74 |
+| tests.test_silver::test_latest_updated_at_compared_as_timestamp | passed | 0.53 |
+| tests.test_silver::test_default_run_ts_is_now_in_whole_seconds | passed | 0.30 |
+| tests.test_silver::test_silver_main_writes_three_checked_files | passed | 2.05 |
+| tests.test_silver::test_sentinels_constant_is_the_agreed_list | passed | 0.00 |
+| tests.test_silver::test_sentinel_in_optional_field_becomes_null_row_kept | passed | 2.15 |
+| tests.test_silver::test_sentinel_variants_are_trimmed_and_case_insensitive[ n/a ] | passed | 1.48 |
+| tests.test_silver::test_sentinel_variants_are_trimmed_and_case_insensitive[Null] | passed | 1.38 |
+| tests.test_silver::test_sentinel_variants_are_trimmed_and_case_insensitive[UNKNOWN] | passed | 1.41 |
+| tests.test_silver::test_sentinel_variants_are_trimmed_and_case_insensitive[none] | passed | 1.41 |
+| tests.test_silver::test_sentinel_variants_are_trimmed_and_case_insensitive[?] | passed | 1.41 |
+| tests.test_silver::test_sentinel_variants_are_trimmed_and_case_insensitive[\\xa0-\\xa0] | passed | 1.39 |
+| tests.test_silver::test_na_is_not_a_sentinel[NA] | passed | 0.55 |
+| tests.test_silver::test_na_is_not_a_sentinel[Na] | passed | 0.53 |
+| tests.test_silver::test_na_is_not_a_sentinel[na] | passed | 0.54 |
+| tests.test_silver::test_sentinel_in_required_field_drops_row | passed | 1.96 |
+| tests.test_silver::test_sentinel_patient_keeps_encounter_with_null_hash | passed | 0.91 |
+| tests.test_silver::test_test_name_is_trimmed_collapsed_and_lowercased | passed | 0.64 |
+| tests.test_silver::test_empty_optional_specialty_is_null_and_kept[] | passed | 0.57 |
+| tests.test_silver::test_empty_optional_specialty_is_null_and_kept[   ] | passed | 0.51 |
+| tests.test_silver::test_empty_optional_specialty_is_null_and_kept[\\xa0\\t] | passed | 0.51 |
+| tests.test_silver::test_active_flag_parsing | passed | 0.52 |
+| tests.test_silver::test_result_value_parsing_keeps_row | passed | 1.55 |
