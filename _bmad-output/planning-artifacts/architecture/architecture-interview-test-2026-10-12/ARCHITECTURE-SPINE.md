@@ -30,9 +30,9 @@ Revised 2026-10-14 by course correction (`sprint-change-proposal-2026-10-14.md`)
 flowchart LR
   synth[synth/generate.py<br/>or supplied files] --> bz[("{data_root}/bronze/{source}.csv")]
   bz --> S[silver job]
-  S --> sv[("{data_root}/silver/clean_{source}/")]
+  S --> sv[("{data_root}/silver/clean_{source}.csv")]
   sv --> G[gold job]
-  G --> gd[("{data_root}/gold/provider_daily_activity/")]
+  G --> gd[("{data_root}/gold/provider_daily_activity.csv")]
   salt[["salt (env or DEFAULT_SALT)"]] -.-> S
 ```
 
@@ -67,8 +67,8 @@ Jobs never import each other. Only `silver.py` imports `hashing.py`.
 - **Prevents:** jobs disagreeing on format, location or rerun behavior
 - **Rule:**
   - Every layer is CSV with a header.
-  - Bronze: `{data_root}/bronze/{source}.csv`. Silver: `{data_root}/silver/clean_{source}/`. Gold: `{data_root}/gold/provider_daily_activity/`.
-  - Silver and gold writes use `mode("overwrite")` on their own folder, so reruns are idempotent. Timestamps are written in `TIMESTAMP_FORMAT`.
+  - Bronze: `{data_root}/bronze/{source}.csv`. Silver: exactly three files `{data_root}/silver/clean_{source}.csv`. Gold: `{data_root}/gold/provider_daily_activity.csv`. Gold reads only the three silver files. Each file is written once through one `write_csv` helper (single partition, then renamed).
+  - Silver and gold writes replace their file, so reruns are idempotent. Timestamps are written in `TIMESTAMP_FORMAT`.
   - `data_root` is a local directory or an `s3://` prefix, and code never branches on which. Local `data_root` sits under a git-ignored path.
 
 ### AD-3 — Declared schemas in one module; only silver types [ADOPTED, revised]
@@ -85,7 +85,7 @@ Jobs never import each other. Only `silver.py` imports `hashing.py`.
 - **Binds:** CAP-2, CAP-3, CAP-4
 - **Prevents:** the hash or duration being computed in two places; a raw patient ID reaching silver or gold; a crosswalk
 - **Rule:**
-  - Silver functions `silver_encounters`, `silver_labs`, `silver_providers`: clean, dedupe, drop rows missing required fields, derive `duration_days`, `hashedpatientid` and `partition_timestamp`, and set `patient_id` to null.
+  - Silver functions `clean_encounters(df, salt, run_ts=None)`, `clean_labs(df, run_ts=None)`, `clean_providers(df, run_ts=None)`: clean, dedupe, drop rows missing required fields, derive `duration_days`, `hashedpatientid` and `partition_timestamp`, and set `patient_id` to null.
   - Gold joins silver tables and aggregates per data-model.md "Gold metrics"; it never reads bronze and never touches `patient_id`.
   - Encounters are reduced to one row per `(customer, encounter_id, provider_id)` before the lab join; `customer` is in every join, grouping and dedupe key.
 
@@ -146,7 +146,7 @@ Jobs never import each other. Only `silver.py` imports `hashing.py`.
 | Source names | `encounters`, `labs`, `providers`: bronze file `{source}.csv`, silver table `clean_{source}`, schema constants `BRONZE_<SOURCE>` / `CLEAN_<SOURCE>` |
 | Columns and rules | Exactly as `data-model.md` (schemas, silver rules, hashing, gold metrics) |
 | Invalid rows | Rows missing a required field are dropped and counted via AD-8, never fixed in place or quarantined with values |
-| Transforms | Pure functions named `<layer>_<source>` (e.g. `silver_labs`), plus `gold_provider_daily_activity`; I/O only in each job's `main` |
+| Transforms | Pure functions named after their output table (`clean_encounters`, `clean_labs`, `clean_providers`, `gold_provider_daily_activity`); I/O only in each job's `main` |
 | Spark error surfaces | CSV `PERMISSIVE`, ANSI mode off, `timeParserPolicy=CORRECTED`, no `FAILFAST` |
 | Tests | pytest with one session-scoped local SparkSession. Chained in-memory dummy datasets per layer (bronze → expected `clean_*` → expected gold); every output checked with `assert_schema` and `assert_content` from `tests/assertions.py`; plus the required tests in `data-model.md` |
 | Data | `synth/generate.py` writes `{data_root}/bronze/{source}.csv` with a fixed seed and every quality issue. Supplied data is never copied into tests, fixtures or `synth/` |

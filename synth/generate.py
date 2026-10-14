@@ -1,107 +1,314 @@
-"""Write synthetic `{RAW_ROOT}/encounters.csv` with a fixed seed.
+"""Write synthetic `{DATA_ROOT}/bronze/{encounters,labs,providers}.csv` with a fixed seed.
 
-Every value is invented. The data deliberately includes messy identities
-(padding, inner spaces, NBSP, lowercase facility), invalid identities
-(blank, whitespace-only and all-zero MRNs, blank facility) and bad dates.
+Every value is invented. Two customers: `alpha` uses integer IDs, `beta` UUIDs (plus a
+deliberate integer collision with alpha). Hand-written rows cover each story 1 case:
+duplicates, versioned encounters, multi-provider encounters, cancelled visits, lab
+statuses, next-day labs, unknown providers, bad durations and missing required fields.
+A seeded bulk adds ordinary activity on top.
 """
 
 from __future__ import annotations
 
 import csv
 import random
-from datetime import date, timedelta
+import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from pipeline.config import RAW_ROOT, require_env
-from pipeline.schemas import RAW_ENCOUNTERS
+from pipeline.config import DATA_ROOT, require_env
+from pipeline.schemas import BRONZE_ENCOUNTERS, BRONZE_LABS, BRONZE_PROVIDERS
 
 SEED = 42
-FACILITIES = ("FAC1", "FAC2")
-N_PATIENTS = 40
-N_ENCOUNTERS = 200
-ENCOUNTER_TYPES = ("OUTPATIENT", "INPATIENT", "EMERGENCY", "TELEHEALTH")
-NBSP = "\u00a0"
+NBSP = " "
+BULK_DAYS = 5
+BULK_START = datetime(2024, 2, 1, tzinfo=UTC)
 
 
-def _messy_facility(rng: random.Random, facility: str) -> str:
-    return rng.choice([facility, facility.lower(), f" {facility} ", f"{NBSP}{facility}"])
+def ts(value: datetime) -> str:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _messy_mrn(rng: random.Random, mrn: str) -> str:
-    variants = [mrn, f"00{mrn}", f" {mrn} ", f"{mrn}{NBSP}"]
-    if len(mrn) > 1:
-        variants.append(f"{mrn[0]} {mrn[1:]}")
-    return rng.choice(variants)
+def _uuid(rng: random.Random) -> str:
+    return str(uuid.UUID(int=rng.getrandbits(128), version=4))
 
 
-def generate_encounters(seed: int = SEED) -> list[dict[str, str]]:
+# ---- Hand-written case rows -------------------------------------------------------
+# encounters: customer, encounter_id, patient_id, provider_id, start, end, updated_at, status
+CASE_ENCOUNTERS = [
+    # Happy path: provider 1 at alpha, two encounters on 2024-01-05, two patients.
+    (
+        "alpha",
+        "1001",
+        "1",
+        "1",
+        "2024-01-05T08:00:00Z",
+        "2024-01-05T14:00:00Z",
+        "2024-01-05T15:00:00Z",
+        "completed",
+    ),
+    (
+        "ALPHA ",
+        "1002",
+        "2",
+        "1",
+        "2024-01-05T09:00:00Z",
+        "2024-01-05T21:00:00Z",
+        "2024-01-05T22:00:00Z",
+        "Completed",
+    ),
+    # Exact duplicate of the row above.
+    (
+        "ALPHA ",
+        "1002",
+        "2",
+        "1",
+        "2024-01-05T09:00:00Z",
+        "2024-01-05T21:00:00Z",
+        "2024-01-05T22:00:00Z",
+        "Completed",
+    ),
+    # Multi-provider encounter: one row per provider.
+    (
+        "alpha",
+        "1003",
+        "3",
+        "1",
+        "2024-01-06T10:00:00Z",
+        "2024-01-07T10:00:00Z",
+        "2024-01-07T11:00:00Z",
+        "completed",
+    ),
+    (
+        "alpha",
+        "1003",
+        "3",
+        "2",
+        "2024-01-06T10:00:00Z",
+        "2024-01-07T10:00:00Z",
+        "2024-01-07T11:00:00Z",
+        "completed",
+    ),
+    # Two versions; the later updated_at wins.
+    ("alpha", "1004", "4", "2", "2024-01-07T08:00:00Z", "", "2024-01-07T07:00:00Z", "scheduled"),
+    (
+        "alpha",
+        "1004",
+        "4",
+        "2",
+        "2024-01-07T08:00:00Z",
+        "2024-01-07T20:00:00Z",
+        "2024-01-07T21:00:00Z",
+        "completed",
+    ),
+    # Cancelled variants: kept in silver, excluded from gold (with their labs).
+    (
+        "alpha",
+        "1005",
+        "5",
+        "1",
+        "2024-01-05T11:00:00Z",
+        "2024-01-05T12:00:00Z",
+        "2024-01-05T12:00:00Z",
+        " Cancelled",
+    ),
+    (
+        "alpha",
+        "1006",
+        "6",
+        "3",
+        "2024-01-08T11:00:00Z",
+        "2024-01-08T12:00:00Z",
+        "2024-01-08T12:00:00Z",
+        "canceled",
+    ),
+    # Duration: end missing; end before start (patient unknown -> null hash).
+    ("alpha", "1007", "7", "2", "2024-01-08T08:00:00Z", "", "2024-01-08T09:00:00Z", "completed"),
+    (
+        "alpha",
+        "1008",
+        "",
+        "2",
+        "2024-01-08T10:00:00Z",
+        "2024-01-08T09:00:00Z",
+        "2024-01-08T11:00:00Z",
+        "completed",
+    ),
+    # Unknown provider 99.
+    (
+        "alpha",
+        "1009",
+        "1",
+        "99",
+        "2024-01-05T13:00:00Z",
+        "2024-01-05T19:00:00Z",
+        "2024-01-05T20:00:00Z",
+        "completed",
+    ),
+    # Missing or unparseable start_time: dropped.
+    ("alpha", "1010", "1", "1", "", "2024-01-05T19:00:00Z", "2024-01-05T20:00:00Z", "completed"),
+    (
+        "alpha",
+        "1011",
+        "1",
+        "1",
+        "not-a-time",
+        "2024-01-05T19:00:00Z",
+        "2024-01-05T20:00:00Z",
+        "completed",
+    ),
+    # Cross-customer collision: patient 1 and provider 1 also exist at beta.
+    (
+        "beta",
+        "B-0001",
+        "1",
+        "1",
+        "2024-01-05T08:00:00Z",
+        "2024-01-05T14:00:00Z",
+        "2024-01-05T15:00:00Z",
+        "completed",
+    ),
+    (
+        " Beta",
+        "6F1C2D3E-0000-4000-8000-00000000B002",
+        f"{NBSP}9B2A7C4D-0000-4000-8000-0000000000A1",
+        "C0FFEE00-0000-4000-8000-0000000000D1",
+        "2024-01-06T09:00:00Z",
+        "2024-01-06T21:00:00Z",
+        "2024-01-06T22:00:00Z",
+        "COMPLETED",
+    ),
+]
+
+# labs: customer, lab_id, encounter_id, test_name, result_value, result_unit, observed_time, status
+CASE_LABS = [
+    ("alpha", "5001", "1001", "glucose", "95", "mg/dL", "2024-01-05T09:00:00Z", "final"),
+    ("alpha", "5001", "1001", "glucose", "95", "mg/dL", "2024-01-05T09:00:00Z", "final"),  # dup
+    ("alpha", "5002", "1001", "sodium", "140", "mmol/L", "2024-01-05T09:05:00Z", ""),  # null status
+    ("alpha", "5003", "1002", "potassium", "4.1", "mmol/L", "2024-01-05T10:00:00Z", "Final"),
+    ("alpha", "5004", "1002", "glucose", "300", "mg/dL", "2024-01-05T10:00:00Z", "retracted"),
+    # Repeated lab_id with different values; observed the day after its encounter.
+    ("alpha", "5005", "1003", "hemoglobin", "13.5", "g/dL", "2024-01-07T08:00:00Z", "final"),
+    ("alpha", "5005", "1003", "hemoglobin", "13.6", "g/dL", "2024-01-07T08:00:00Z", "final"),
+    (
+        "alpha",
+        "5006",
+        "1005",
+        "glucose",
+        "88",
+        "mg/dL",
+        "2024-01-05T11:30:00Z",
+        "final",
+    ),  # cancelled enc
+    (
+        "alpha",
+        "5007",
+        "",
+        "glucose",
+        "88",
+        "mg/dL",
+        "2024-01-05T11:30:00Z",
+        "final",
+    ),  # no encounter
+    ("alpha", "5008", "1004", "glucose", "abc", "mg/dL", "2024-01-07T09:00:00Z", "final"),
+    ("alpha", "5009", "1009", "sodium", "138", "mmol/L", "2024-01-05T14:00:00Z", "final"),
+    ("beta", "L-0001", "B-0001", "glucose", "101", "mg/dL", "2024-01-05T09:00:00Z", "final"),
+]
+
+# providers: customer, provider_id, provider_name, specialty, active_flag
+CASE_PROVIDERS = [
+    ("alpha", "1", "Dr. Ada Synthetic", "Cardiology", "true"),
+    ("alpha", "1", "Dr. Ada Synthetic", "Cardiology", "true"),  # dup
+    ("alpha", "2", "Dr. Ben Example", "", "Y"),  # blank specialty -> null
+    ("alpha", "3", "Dr. Cy Sample", "Pediatrics", "no"),
+    ("alpha", " 3", "Dr. Cy Sample", "Neurology", "0"),  # repeated key
+    ("alpha", "", "Dr. Nobody", "Surgery", "yes"),  # missing provider_id
+    ("beta", "1", "Dr. Dee Placeholder", "Oncology", "F"),
+    ("beta", "c0ffee00-0000-4000-8000-0000000000d1", "Dr. Eve Fictional", "Radiology", "maybe"),
+]
+
+STATUSES = ("completed", "Completed", " completed ", "in-progress", "cancelled")
+LAB_STATUSES = ("final", "final", "preliminary", "", "retracted")
+TESTS = (("glucose", "mg/dL"), ("sodium", "mmol/L"), ("potassium", "mmol/L"))
+SPECIALTIES = ("Family Medicine", "Internal Medicine", "Emergency", "")
+
+
+def _bulk(rng: random.Random):
+    """Ordinary seeded activity for 2024-02-01..05; IDs never overlap the case rows."""
+    encounters, labs, providers = [], [], []
+    for customer, uuids in (("alpha", False), ("beta", True)):
+        provider_ids = [_uuid(rng) if uuids else str(200 + i) for i in range(4)]
+        patient_ids = [_uuid(rng) if uuids else f"{3000 + i}" for i in range(12)]
+        for n, pid in enumerate(provider_ids):
+            providers.append(
+                (customer, pid, f"Dr. Bulk {customer.title()} {n}", rng.choice(SPECIALTIES), "1")
+            )
+        for n in range(20):
+            enc_id = _uuid(rng).upper() if uuids else str(7000 + n)
+            start = BULK_START + timedelta(days=rng.randrange(BULK_DAYS), hours=rng.randint(7, 12))
+            # Durations are exact binary fractions of a day, so sums compare exactly.
+            end = start + timedelta(hours=rng.choice((3, 6, 12, 24)))
+            patient = rng.choice(patient_ids)
+            status = rng.choice(STATUSES)
+            for pid in rng.sample(provider_ids, rng.choice((1, 1, 2))):
+                encounters.append(
+                    (customer, enc_id, patient, pid, ts(start), ts(end), ts(end), status)
+                )
+            for k in range(rng.randint(0, 3)):
+                test, unit = rng.choice(TESTS)
+                lab_id = _uuid(rng) if uuids else str(90000 + n * 10 + k)
+                labs.append(
+                    (
+                        customer,
+                        lab_id,
+                        enc_id,
+                        test,
+                        str(rng.randint(1, 300)),
+                        unit,
+                        ts(start + timedelta(hours=1)),
+                        rng.choice(LAB_STATUSES),
+                    )
+                )
+    return encounters, labs, providers
+
+
+def generate(seed: int = SEED) -> dict[str, list[tuple[str, ...]]]:
     rng = random.Random(seed)
-    # Synthetic patients; some MRNs repeat across facilities on purpose.
-    patients = []
-    for i in range(N_PATIENTS):
-        facility = FACILITIES[i % 2]
-        mrn = str(100 + (i // 2) if i < 10 else rng.randint(1000, 99999))
-        patients.append((facility, mrn))
-
-    rows = []
-    start = date(2020, 1, 1)
-    for n in range(N_ENCOUNTERS):
-        facility, mrn = rng.choice(patients)
-        enc_date = start + timedelta(days=rng.randint(0, 1800))
-        enc_type = rng.choice(ENCOUNTER_TYPES)
-        discharge = ""
-        if enc_type == "INPATIENT":
-            discharge = (enc_date + timedelta(days=rng.randint(1, 10))).isoformat()
-        rows.append(
-            {
-                "facility": _messy_facility(rng, facility),
-                "mrn": _messy_mrn(rng, mrn),
-                "encounter_id": f"E{n:05d}",
-                "encounter_date": enc_date.isoformat(),
-                "encounter_type": enc_type,
-                "discharge_date": discharge,
-            }
-        )
-
-    # Invalid rows that silver must drop and count.
-    bad = [
-        {"mrn": ""},
-        {"mrn": "   "},
-        {"mrn": NBSP},
-        {"mrn": "0000"},
-        {"facility": ""},
-        {"facility": "  "},
-        {"encounter_date": ""},
-        {"encounter_date": "not-a-date"},
-        {"encounter_date": "2023-13-45"},
-        {"discharge_date": "2023-02-30"},
-        {"discharge_date": "soon"},
-    ]
-    for j, override in enumerate(bad):
-        row = dict(rows[j])
-        row["encounter_id"] = f"X{j:05d}"
-        row.update(override)
-        rows.append(row)
-
-    rng.shuffle(rows)
-    return rows
+    encounters, labs, providers = _bulk(rng)
+    out = {
+        "encounters": CASE_ENCOUNTERS + encounters,
+        "labs": CASE_LABS + labs,
+        "providers": CASE_PROVIDERS + providers,
+    }
+    for rows in out.values():
+        rng.shuffle(rows)
+    return out
 
 
-def write_encounters(raw_root: str | Path, seed: int = SEED) -> Path:
-    out_dir = Path(raw_root)
+HEADERS = {
+    "encounters": BRONZE_ENCOUNTERS.fieldNames(),
+    "labs": BRONZE_LABS.fieldNames(),
+    "providers": BRONZE_PROVIDERS.fieldNames(),
+}
+
+
+def write_bronze(data_root: str | Path, seed: int = SEED) -> dict[str, Path]:
+    out_dir = Path(data_root) / "bronze"
     out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / "encounters.csv"
-    rows = generate_encounters(seed)
-    with path.open("w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=RAW_ENCOUNTERS.fieldNames())
-        writer.writeheader()
-        writer.writerows(rows)
-    return path
+    paths = {}
+    for source, rows in generate(seed).items():
+        path = out_dir / f"{source}.csv"
+        with path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(HEADERS[source])
+            writer.writerows(rows)
+        paths[source] = path
+    return paths
 
 
 def main() -> None:
-    path = write_encounters(require_env(RAW_ROOT))
-    print(f"wrote synthetic encounters to {path}")
+    paths = write_bronze(require_env(DATA_ROOT).rstrip("/"))
+    for source, path in paths.items():
+        print(f"wrote synthetic {source} to {path}")
 
 
 if __name__ == "__main__":

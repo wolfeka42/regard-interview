@@ -2,28 +2,9 @@
 
 import pytest
 
-from pipeline.patient_key import make_key_udf
+from pipeline.hashing import make_hash_udf
 from pipeline.spark import build_spark
-
-TEST_SECRET = "synthetic-test-key-not-a-real-secret"
-
-FORBIDDEN_GOLD_COLUMNS = {
-    "name",
-    "first_name",
-    "last_name",
-    "ssn",
-    "mrn",
-    "facility",
-    "phone",
-    "email",
-    "street",
-    "address",
-    "city",
-    "dob",
-    "date_of_birth",
-    "birth_date",
-    "zip",
-}
+from tests.datasets import SALT
 
 
 @pytest.fixture(scope="session")
@@ -34,5 +15,5 @@ def spark():
 
 
 @pytest.fixture(scope="session")
-def key_udf():
-    return make_key_udf(TEST_SECRET)
+def hash_udf():
+    return make_hash_udf(SALT)

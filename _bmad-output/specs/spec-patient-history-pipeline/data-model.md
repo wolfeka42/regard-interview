@@ -7,8 +7,8 @@ Rewritten 2026-10-14 from the actual interview prompt (`../../planning-artifacts
 | Layer | Holds | PHI | Location |
 |---|---|---|---|
 | Bronze | Raw records as received, all strings, CSV | Yes | `{DATA_ROOT}/bronze/{encounters,labs,providers}.csv` |
-| Silver | `clean_encounters`, `clean_labs`, `clean_providers`; typed, deduplicated, patient ID hashed | Yes | `{DATA_ROOT}/silver/clean_{source}/` (CSV) |
-| Gold | `provider_daily_activity`: one row per customer, provider and encounter day | Treated as PHI | `{DATA_ROOT}/gold/provider_daily_activity/` (CSV) |
+| Silver | `clean_encounters`, `clean_labs`, `clean_providers`; typed, deduplicated, patient ID hashed | Yes | `{DATA_ROOT}/silver/clean_{encounters,labs,providers}.csv` |
+| Gold | `provider_daily_activity`: one row per customer, provider and encounter day | Treated as PHI | `{DATA_ROOT}/gold/provider_daily_activity.csv` |
 
 ## Bronze CSV columns
 

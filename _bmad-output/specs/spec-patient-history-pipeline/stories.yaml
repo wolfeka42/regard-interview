@@ -23,8 +23,7 @@
 - id: "2"
   title: Silver cleans every source's quality issues
   description: >-
-    Dedupe all three sources (encounters by latest updated_at per customer, encounter_id,
-    provider_id); turn shared sentinel values into null; normalize test_name and status; keep empty
+    Turn shared sentinel values into null; normalize test_name; keep empty
     specialty as null; parse active_flag and result_value; drop and count rows missing required
     fields. Synthetic data gains each issue, and tests assert each rule and the dropped counts.
 - id: "3"
