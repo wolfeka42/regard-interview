@@ -1,0 +1,18 @@
+customer,provider_id,provider_name,specialty,active_flag,partition_timestamp
+alpha,1,Dr. Ada Synthetic,Cardiology,true,2026-10-14T20:09:54Z
+alpha,2,Dr. Ben Example,,true,2026-10-14T20:09:54Z
+alpha,200,Dr. Bulk Alpha 0,Family Medicine,true,2026-10-14T20:09:54Z
+alpha,201,Dr. Bulk Alpha 1,Family Medicine,true,2026-10-14T20:09:54Z
+alpha,202,Dr. Bulk Alpha 2,Emergency,true,2026-10-14T20:09:54Z
+alpha,203,Dr. Bulk Alpha 3,Internal Medicine,true,2026-10-14T20:09:54Z
+alpha,3,Dr. Cy Sample,Neurology,false,2026-10-14T20:09:54Z
+alpha,4,Dr. Flo Invented,,,2026-10-14T20:09:54Z
+alpha,5,Dr. Gus Madeup,,true,2026-10-14T20:09:54Z
+alpha,6,Dr. Hal Imaginary,Nephrology,false,2026-10-14T20:09:54Z
+alpha,7,Dr. Ivy Pretend,Dermatology,true,2026-10-14T20:09:54Z
+beta,1,Dr. Dee Placeholder,Oncology,false,2026-10-14T20:09:54Z
+beta,4bf50b52-309d-458c-a7a0-c3d77c967f79,Dr. Bulk Beta 2,Emergency,true,2026-10-14T20:09:54Z
+beta,944528c0-0ef8-42d6-b7fd-564637bb3eec,Dr. Bulk Beta 3,,true,2026-10-14T20:09:54Z
+beta,b7e99aca-a970-45e1-8e46-d534c88a618e,Dr. Bulk Beta 1,Internal Medicine,true,2026-10-14T20:09:54Z
+beta,c0ffee00-0000-4000-8000-0000000000d1,Dr. Eve Fictional,Radiology,,2026-10-14T20:09:54Z
+beta,fed4057d-bb02-4576-b512-c4c3b253d218,Dr. Bulk Beta 0,Emergency,true,2026-10-14T20:09:54Z

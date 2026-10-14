@@ -11,5 +11,4 @@ _bmad/config.user.toml
 _bmad/custom/config.user.toml
 .claude/settings.local.json
 
-# Pipeline data (keep PHI and generated data out of git)
-data/
+# data/

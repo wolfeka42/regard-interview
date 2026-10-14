@@ -1,0 +1,23 @@
+customer,provider_id,provider_name,specialty,active_flag
+-,8,Dr. Dash Nobody,Surgery,yes
+beta,944528c0-0ef8-42d6-b7fd-564637bb3eec,Dr. Bulk Beta 3,,1
+alpha,6,Dr. Hal Imaginary,Nephrology,N
+alpha,3,Dr. Cy Sample,Pediatrics,no
+alpha,201,Dr. Bulk Alpha 1,Family Medicine,1
+alpha,202,Dr. Bulk Alpha 2,Emergency,1
+alpha,1,Dr. Ada Synthetic,Cardiology,true
+alpha,200,Dr. Bulk Alpha 0,Family Medicine,1
+alpha, 3,Dr. Cy Sample,Neurology,0
+alpha,unknown,Dr. Nil Nobody,Surgery,yes
+alpha,5,Dr. Gus Madeup,    , TRUE 
+alpha,7,Dr. Ivy Pretend,Dermatology,Yes
+beta,fed4057d-bb02-4576-b512-c4c3b253d218,Dr. Bulk Beta 0,Emergency,1
+beta,1,Dr. Dee Placeholder,Oncology,F
+alpha,1,Dr. Ada Synthetic,Cardiology,true
+alpha,203,Dr. Bulk Alpha 3,Internal Medicine,1
+beta,4bf50b52-309d-458c-a7a0-c3d77c967f79,Dr. Bulk Beta 2,Emergency,1
+beta,b7e99aca-a970-45e1-8e46-d534c88a618e,Dr. Bulk Beta 1,Internal Medicine,1
+beta,c0ffee00-0000-4000-8000-0000000000d1,Dr. Eve Fictional,Radiology,maybe
+alpha,,Dr. Nobody,Surgery,yes
+alpha,2,Dr. Ben Example,,Y
+alpha,4,Dr. Flo Invented,N/A,N/A
