@@ -15,6 +15,3 @@ Updated 2026-10-14 (sprint-change-proposal-2026-10-14.md): removed the facility-
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-steel-thread-provider-daily-activity.md`
   summary: A missing bronze file stops silver with a Spark traceback after earlier sources were already rewritten.
   evidence: silver.main reads and writes each source in turn; the error names the path only. Pre-checking inputs is bad-input handling for story 3.
-- source_spec: `_bmad-output/implementation-artifacts/spec-1-steel-thread-provider-daily-activity.md`
-  summary: docs/hipaa-context.md line 15 reads "ld now falls under the Security Rule" instead of "Gold now ...".
-  evidence: Uncommitted edit not made by this build; surfaced to the human to restore.

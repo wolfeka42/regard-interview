@@ -2,7 +2,8 @@
 title: 'Story 1 (part 2): Silver cleans every source quality issue'
 type: 'feature'
 created: '2026-10-14'
-status: 'draft'
+status: 'in-progress'
+baseline_commit: '1a39acf1d899b24918e5630c774eb0b46f0e42e9'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -39,11 +40,9 @@ context:
 | `result_value` | `" 4.1 "`, `"abc"`, `"N/A"` | 4.1, null, null; row kept | N/A |
 | Dropped counts | Each source mixes exact duplicates, superseded versions and rows missing required fields | `rows_in - rows_out` per source equals the exact number of such rows | Counts only, never values |
 
+**Decision (NA, Kailey 2026-10-14):** `"NA"` is not a sentinel, so `"Na"` (sodium) stays real text. `SENTINELS` = `""`, `null`, `n/a`, `none`, `-`, `?`, `unknown`, compared after trimming, case-insensitive.
+
 </frozen-after-approval>
-
-## Open Questions
-
-- `"NA"` in the sentinel list — options: drop it (`"Na"`, the sodium test name or unit, stays real text; a literal `"NA"` is not nulled) / keep it case-insensitive (every `"Na"`/`"na"` becomes null, so sodium labs lose their `test_name`)
 
 ## Code Map
 

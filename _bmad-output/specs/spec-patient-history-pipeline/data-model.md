@@ -35,7 +35,7 @@ customer string, provider_id string, encounter_date date, provider_name string, 
 ## Silver rules
 
 - **IDs:** `customer` and IDs trimmed with `(?U)\s`; UUIDs and `customer` lowercased; integer IDs keep leading zeros.
-- **Sentinels:** one shared list (`""`, `NULL`, `N/A`, `NA`, `None`, `-`, `?`, `unknown`, case-insensitive) becomes null in every string field.
+- **Sentinels:** one shared list (`""`, `NULL`, `N/A`, `None`, `-`, `?`, `unknown`, trimmed, case-insensitive; `NA` is excluded so `Na`, sodium, stays real text) becomes null in every string field.
 - **Formatting:** `test_name` trimmed, inner whitespace collapsed, lowercased; `status` trimmed and lowercased.
 - **Types:** timestamps parsed with `TIMESTAMP_FORMAT` in UTC, unparseable → null; `result_value` non-numeric → null (row kept); `active_flag` from `true/false/t/f/1/0/y/n/yes/no`, else null; empty `specialty` is null and kept.
 - **duration_days:** `(end_time - start_time) / 86400 s`; null if either end is null or end is before start.
