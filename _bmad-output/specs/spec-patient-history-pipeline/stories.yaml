@@ -1,44 +1,39 @@
 - id: "1"
-  title: Steel thread - a doctor sees one patient's encounters in gold
+  title: Steel thread - gold shows how busy each provider was each day
   description: >-
-    One command takes a synthetic encounters file through bronze, silver and gold, producing
-    a gold row per encounter keyed by patient_key_v1 with the full encounter date (CAP-1,
-    CAP-3, CAP-4, CAP-5, CAP-6 in their simplest form). Tests assert the exact gold schema,
-    the 64-hex deterministic key, a missing key failing at startup, rows in time order
-    (spine AD-11), and blank MRNs dropped rather than sharing a key (spine AD-6).
+    synth/generate.py writes the bronze layer as CSV (encounters.csv, labs.csv, providers.csv
+    under DATA_ROOT/bronze/); one command runs silver (clean_encounters, clean_labs,
+    clean_providers) then gold (provider_daily_activity), both written as CSV. Silver parses
+    TIMESTAMP_FORMAT, computes duration_days, nulls patient_id and adds
+    hashedpatientid = HMAC(salt, customer:patient_id). Gold aggregates encounter_count,
+    unique_patients, totaldurationdays and non-retracted lab_count per customer, provider and
+    encounter day, excluding cancelled encounters, with provider fields joined. Tests build dummy
+    datasets per layer from the output schemas (bronze -> expected clean_* -> expected gold) and
+    check every output table with assert_schema and assert_content in tests/assertions.py. They
+    also assert the hash is deterministic, 64-hex and customer-scoped, patient_id is null in
+    silver, a multi-provider encounter counts for each provider, cancelled encounters and
+    retracted labs are excluded, a lab counts on its encounter's day, and a missing DATA_ROOT
+    fails at startup.
   spec_checkpoint: true
   done_checkpoint: true
   invoke_dev_with: >-
-    Keep the schema in one swappable StructType module; this is where the interview's real
-    data lands after the data review. Smallest working slice only: one source, no joins.
+    Reuse the story 1 scaffold from 665ae5b (jobs, config, log, spark, CLI, HMAC, fixtures); retire
+    the bronze job and RAW_ROOT; replace the facility/MRN and patient-history code. Keep all schemas and both constants in schemas.py.
+    Reduce encounters to one row per (customer, encounter_id, provider_id) before the lab join.
 - id: "2"
-  title: Gold shows each patient's age and location at every encounter
+  title: Silver cleans every source's quality issues
   description: >-
-    Join the patients source so each gold event carries age_at_encounter (90+ for ages over
-    89), sex, state and zip3 (CAP-2, CAP-4). Tests prove DOB, name, SSN, phone, email,
-    street, city and full ZIP never reach gold.
+    Dedupe all three sources (encounters by latest updated_at per customer, encounter_id,
+    provider_id); turn shared sentinel values into null; normalize test_name and status; keep empty
+    specialty as null; parse active_flag and result_value; drop and count rows missing required
+    fields. Synthetic data gains each issue, and tests assert each rule and the dropped counts.
 - id: "3"
-  title: Lab results appear in the patient's history
-  description: >-
-    Lab results become dated gold events with code, value and unit, alongside encounters
-    for the same patient_key_v1 (CAP-4). Extends the existing schema test.
-- id: "4"
-  title: Diagnoses and medications appear in the patient's history
-  description: >-
-    Diagnoses and medications become dated gold events, completing the event types in
-    data-model.md (CAP-4).
-- id: "5"
   title: Bad input is handled without leaking PHI
   description: >-
-    Invalid rows are dropped in silver and only their counts are logged; bronze row count
-    matches the source (CAP-1, CAP-2). Tests prove no row values appear in logs or errors.
-- id: "6"
+    Malformed bronze CSV rows and forced Spark failures never put row values in logs or errors;
+    malformed rows are counted. Carries over the old story 5.
+- id: "4"
   title: The same pipeline is ready to run on AWS EMR
   description: >-
-    `python -m pipeline run --target emr` prints an `aws emr create-cluster` command for a
-    transient EMR 7.14.0 cluster with three Steps, bronze to silver to gold (CAP-5, spine
-    AD-9). The story decides how the job gets the HMAC key from Secrets Manager, and a test
-    proves the printed command contains no key value (spine AD-7).
-  invoke_dev_with: >-
-    Use placeholders for the S3 bucket, IAM roles, subnet and region. No boto3. Only a
-    secret ID may appear in the command, never the key value.
+    Unchanged from the old story 6, except that the secret is the hashing salt: only a secret ID may
+    appear in the printed command, never its value.

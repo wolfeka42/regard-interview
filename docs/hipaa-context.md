@@ -29,3 +29,12 @@ Gold now falls under the Security Rule (164.312):
 - HMAC-SHA256 with a secret key held in AWS Secrets Manager or KMS. Never a plain hash: MRNs come from a small range and can be brute-forced.
 - Normalize the MRN and prefix the source facility before hashing; deterministic across tables and loads; key version in the column name.
 - Doctor lookup: an app that holds the key computes HMAC(MRN) at query time. No crosswalk table is stored.
+
+## Update 2026-10-14: provider daily activity
+
+The actual interview prompt replaced the patient-history gold table; the sections above describe the earlier design and stay for rationale.
+- Gold `provider_daily_activity` holds aggregates per customer, provider and day, with no patient-level field. It is still handled as PHI: dates plus small counts (for example one patient seen by a provider on a day) can single a patient out.
+- Silver keeps `hashedpatientid` = HMAC-SHA256 of `customer:patient_id` and nulls `patient_id`. Including `customer` keeps integer IDs from colliding across hospitals.
+- The prompt fixes `DEFAULT_SALT = "regard-demo-salt"`. A known salt over small integer IDs can be brute-forced, so the hash is a pseudonym only while the salt is secret; production sets `PATIENT_ID_SALT` from AWS Secrets Manager.
+- Provider names are not patient PHI and stay in silver and gold.
+- Security Rule controls (access limits, audit logs, encryption, BAA) still apply to every layer.

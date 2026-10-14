@@ -78,6 +78,8 @@ context:
 
 ## Spec Change Log
 
+- 2026-10-14: Superseded by course correction (`_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-14.md`). The product changed to provider daily activity; new story 1 in `stories.yaml` reuses this story's scaffold from `665ae5b`. This file is kept as history.
+
 ## Review Triage Log
 
 | # | Layer | Finding | Verdict | Evidence | Route |

@@ -1,55 +1,70 @@
 # Data model
 
+Rewritten 2026-10-14 from the actual interview prompt (`../../planning-artifacts/sprint-change-proposal-2026-10-14.md`).
+
 ## Layers
 
-| Layer | Holds | PHI | Responsibilities |
+| Layer | Holds | PHI | Location |
 |---|---|---|---|
-| Bronze | Raw records as received | Yes | Read under an explicit all-text `StructType`; no transformation. |
-| Silver | Cleaned, typed records | Yes | Type dates; drop and count invalid rows; normalize facility and MRN; compute `age_at_encounter`, `zip3` and the patient key on event rows. `silver/patients` holds identifiers but never the key. |
-| Gold | Per-patient clinical event history | Yes (treatment use) | Select allowed columns only; one row per clinical event. |
+| Bronze | Raw records as received, all strings, CSV | Yes | `{DATA_ROOT}/bronze/{encounters,labs,providers}.csv` |
+| Silver | `clean_encounters`, `clean_labs`, `clean_providers`; typed, deduplicated, patient ID hashed | Yes | `{DATA_ROOT}/silver/clean_{source}/` (CSV) |
+| Gold | `provider_daily_activity`: one row per customer, provider and encounter day | Treated as PHI | `{DATA_ROOT}/gold/provider_daily_activity/` (CSV) |
 
-## Generic input shape (prepared design, swapped on the day)
+## Bronze CSV columns
 
-| Source | Key fields |
+| File | Columns |
 |---|---|
-| patients | facility, mrn, name, dob, sex, ssn, phone, email, street, city, state, zip |
-| encounters | facility, mrn, encounter_id, encounter_date, encounter_type, discharge_date |
-| labs | facility, mrn, encounter_id, test_code, result_value, unit, result_date |
-| diagnoses | facility, mrn, encounter_id, icd10_code, diagnosis_date |
-| medications | facility, mrn, encounter_id, drug_code, dose, start_date, end_date |
+| `encounters.csv` | customer, encounter_id, patient_id, provider_id, start_time, end_time, updated_at, status |
+| `labs.csv` | customer, lab_id, encounter_id, test_name, result_value, result_unit, observed_time, status |
+| `providers.csv` | customer, provider_id, provider_name, specialty, active_flag |
 
-## Gold columns
+An encounter with several providers is one row per provider.
 
-| Column | Rule |
-|---|---|
-| `patient_key_v1` | HMAC-SHA256 hex (64 characters) |
-| `event_type` | encounter, lab, diagnosis or medication |
-| `event_date` | Full service date |
-| `event_end_date` | Full date, nullable: encounter `discharge_date`, medication `end_date` |
-| `event_code`, `event_value`, `event_unit` | From the source event |
-| `encounter_id` | Source encounter ID |
-| `age_at_encounter` | Integer years; 90 for ages over 89 |
-| `sex`, `state`, `zip3` | ZIP cut to 3 digits |
+## Silver schemas
 
-**Never in gold:** name, SSN, MRN, phone, email, street, city, date of birth, full ZIP.
+**clean_encounters:** customer string, encounter_id string, patient_id string (always null), provider_id string, start_time timestamp, end_time timestamp, status string, duration_days double, hashedpatientid string, partition_timestamp timestamp.
 
-## Patient key
+**clean_labs:** customer string, lab_id string, encounter_id string, test_name string, result_value double, result_unit string, observed_time timestamp, status string, partition_timestamp timestamp.
 
-- Input: `facility + ":" + mrn`. Facility: surrounding whitespace stripped, uppercased. MRN: all whitespace removed, leading zeros stripped. A row with an empty normalized facility or MRN is dropped, never hashed.
-- HMAC-SHA256 with a key read from an environment variable. The pipeline fails at startup if the key is missing.
-- Deterministic across tables and loads. Rotating the key re-keys everything and bumps the column version (`patient_key_v2`).
-- Computed only on silver event rows; no dataset stores the MRN next to the key (no crosswalk).
-- Doctor lookup by MRN belongs in an app that holds the key; it is not built.
+**clean_providers:** customer string, provider_id string, provider_name string, specialty string, active_flag boolean, partition_timestamp timestamp.
+
+## Gold schema: provider_daily_activity
+
+customer string, provider_id string, encounter_date date, provider_name string, specialty string, active_flag boolean, encounter_count long, unique_patients long, totaldurationdays double, lab_count long. Sorted by customer, provider_id, encounter_date.
+
+## Silver rules
+
+- **IDs:** `customer` and IDs trimmed with `(?U)\s`; UUIDs and `customer` lowercased; integer IDs keep leading zeros.
+- **Sentinels:** one shared list (`""`, `NULL`, `N/A`, `NA`, `None`, `-`, `?`, `unknown`, case-insensitive) becomes null in every string field.
+- **Formatting:** `test_name` trimmed, inner whitespace collapsed, lowercased; `status` trimmed and lowercased.
+- **Types:** timestamps parsed with `TIMESTAMP_FORMAT` in UTC, unparseable → null; `result_value` non-numeric → null (row kept); `active_flag` from `true/false/t/f/1/0/y/n/yes/no`, else null; empty `specialty` is null and kept.
+- **duration_days:** `(end_time - start_time) / 86400 s`; null if either end is null or end is before start.
+- **Dedupe:** exact duplicates dropped; encounters keep the latest `updated_at` per `(customer, encounter_id, provider_id)`; labs one row per `(customer, lab_id)`, providers one per `(customer, provider_id)`, chosen deterministically.
+- **Required fields (missing → dropped and counted):** encounters `customer, encounter_id, provider_id, start_time`; labs `customer, lab_id, encounter_id`; providers `customer, provider_id`. A null `patient_id` keeps the encounter with a null hash.
+- **partition_timestamp:** the run time, captured once per run.
+
+## Patient ID hashing
+
+- `hashedpatientid = HMAC-SHA256(salt, customer + ":" + patient_id)`, 64 lowercase hex characters, null for a null ID. `customer` is included because integer IDs collide across customers.
+- Salt: `PATIENT_ID_SALT` env var if set, else `DEFAULT_SALT = "regard-demo-salt"` (interview requirement; production uses Secrets Manager).
+- `patient_id` is null in silver; no crosswalk is stored.
+
+## Gold metrics
+
+Per `(customer, provider_id, encounter_date = to_date(start_time))`, over encounters whose status is not `cancelled` or `canceled`:
+
+- `encounter_count = count(DISTINCT encounter_id)`
+- `unique_patients = count(DISTINCT hashedpatientid)`
+- `totaldurationdays = sum(duration_days)`, 0.0 when none
+- `lab_count` = labs whose status `IS DISTINCT FROM 'retracted'`, joined through `(customer, encounter_id)` and counted on the encounter's day; 0 when none
+
+Encounters are reduced to one row per `(customer, encounter_id, provider_id)` before the lab join so labs are not counted twice. Providers are left-joined on `(customer, provider_id)`; activity for an unknown provider keeps null provider fields.
 
 ## Required tests
 
-- The exact gold schema; no forbidden column present.
-- `silver/patients` schema has no key field.
-- Gold rows are in time order per patient (`patient_key_v1`, `event_date`, `event_type`, `event_code`, nulls last), tested on `order_gold` output, not on Parquet read back.
-- A blank, whitespace-only or all-zero MRN, or a blank facility, is dropped and counted, never hashed.
-- Patient key: deterministic, 64 hex characters, differs by facility, missing key fails fast.
-- `age_at_encounter` calculation and 90+ grouping; ZIP3 truncation.
-- Bronze row count matches the source; invalid rows are counted in silver.
-- All fixtures are synthetic.
-
-Column types, per-source event mapping and layer rules: `ARCHITECTURE-SPINE.md` (conventions, AD-3 to AD-6).
+- Chained dummy datasets per layer: dummy bronze → expected `clean_*` → expected `provider_daily_activity`.
+- `tests/assertions.py`: `assert_schema(df, schema)` (exact names, types, order) and `assert_content(df, expected_rows)` (exact, order-independent), applied to every silver and gold output.
+- Hash: deterministic, 64 hex, customer-scoped; `patient_id` null in silver.
+- Cancelled encounters excluded; retracted labs excluded, null-status labs counted; multi-provider encounter counted per provider; lab counted on its encounter's day.
+- Each cleaning rule (story 2) and dropped counts.
+- Missing `DATA_ROOT` fails at startup. All fixtures are synthetic.

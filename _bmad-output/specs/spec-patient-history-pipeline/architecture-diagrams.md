@@ -4,11 +4,10 @@
 
 ```mermaid
 flowchart LR
-  raw[Raw files<br/>CSV / JSON] -->|explicit StructType| bronze[(Bronze<br/>raw, PHI)]
-  bronze -->|clean, type, drop invalid,<br/>age_at_encounter, HMAC key| silver[(Silver<br/>clean, PHI)]
-  silver -->|allowed columns,<br/>one row per event| gold[(Gold<br/>patient history,<br/>PHI for treatment)]
-  key[[HMAC key<br/>env var / Secrets Manager]] -.-> silver
-  gold --> doctors[Doctors reviewing<br/>a patient's history]
+  bronze[(Bronze CSV<br/>encounters, labs, providers<br/>raw, PHI)] -->|explicit StructType,<br/>dedupe, sentinels, formatting,<br/>HMAC customer:patient_id| silver[(Silver<br/>clean_encounters, clean_labs,<br/>clean_providers)]
+  silver -->|exclude cancelled + retracted,<br/>join, aggregate per provider-day| gold[(Gold<br/>provider_daily_activity)]
+  salt[[salt<br/>env var or DEFAULT_SALT]] -.-> silver
+  gold --> q["How busy was each provider<br/>on each day?"]
 ```
 
 ## Development flow

@@ -12,9 +12,9 @@
 
 ## Cut order when behind
 
-Stories form a steel thread (`stories.yaml`): story 1 alone produces a working gold table, and finishing it counts as success. Stories 2 to 6 are stretch; cut from the last story upward: 6, then 5, 4, 3, 2.
+Stories form a steel thread (`stories.yaml`): story 1 alone produces a working gold table, and finishing it counts as success. Stories 2 to 4 are stretch; cut from the last story upward: 4, then 3, 2.
 
-Never cut: story 1 (gold table; gold-schema, patient-key, blank-MRN and time-order tests) and the PHI review.
+Never cut: story 1 (gold table; schema and content checks for each layer, hash, cancelled, retracted and multi-provider tests) and the PHI review.
 
 ## AI workflow to show
 
